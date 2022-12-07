@@ -6,7 +6,7 @@ gsearch is the new name of the crate archaea.  It stands for **genomic search**.
 
 This package (**currently in development**) compute probminhash signature of  bacteria and archaea (or virus and fungi) genomes and stores the id of bacteria and probminhash signature in a Hnsw structure for searching of new request genomes.
 
-This package is developped by Jean-Pierre Both (https://github.com/jean-pierreBoth) for the software part and Jianshu Zhao (https://github.com/jianshu93) for the genomics part.
+This package is developped by Jean-Pierre Both (https://github.com/jean-pierreBoth) for the software part and Jianshu Zhao (https://github.com/jianshu93) for the genomics part. We also created a mirror of this repo on GitLab (https://gitlab.com/Jianshu_Zhao/archaea), just in case Github service is not available in some region, e.g, China.
 
 ## Sketching of genomes/tohnsw
 
@@ -24,23 +24,57 @@ For requests  the module ***request*** is being used. It reloads the dumped file
 takes a list of fasta files containing requests and for each fasta file dumps the asked number of nearest neighbours.
 
 ## Usage
+## Simple case for install:
+
+**Pre-built binaries** will be available on release page (https://github.com/jean-pierreBoth/gsearch/releases/tag/v0.0.12) for major platforms (no need to install but just download and make it executable). We recommend you use the linux one (GSearch_Linux_x86-64_intel-mkl-static.zip
+) in this release page for convenience because the only dependency is GCC (Recent Linux version does not allow static compiling of GCC libraries like libc.so.6).
+
+Otherwise it is possible to install/compile by yourself (see install section)
+
 
 ```bash
-### build database given genome file directory, fna.gz was expected. L for nt and .faa or .faa.gz for --aa. Limit for k is 32 (15 not work due to compression), for s is 65535 (u16) and for n is 255 (u8)
-tohnsw -d db_dir_nt -s 12000 -k 16 --ef 1600 -n 128
-tohnsw -d db_dir_aa -s 12000 -k 7 --ef 1600 -n 128 --aa
+### get the binary (make sure you have recent GCC installed):
+wget https://github.com/jean-pierreBoth/gsearch/releases/download/v0.0.12/GSearch_Linux_x86-64_intel-mkl-static.zip
+unzip GSearch_Linux_x86-64_intel-mkl-static.zip
+chmod a+x ./GSearch_Linux_x86-64_intel-mkl-static/*
+### put it under your system/usr bin directory (/usr/local/bin/ as an example) where it can be called:
+cp ./GSearch_Linux_x86-64_intel-mkl-static/* /usr/local/bin/
+### check install
+tohnsw -h
+request -h
+
 ### request neighbours for each genomes (fna, fasta, faa et.al. are supported) in query_dir_nt or aa using pre-built database:
 wget http://enve-omics.ce.gatech.edu/data/public_gsearch/GTDB_r207_hnsw_graph.tar.gz
 tar xzvf ./GTDB_r207_hnsw_graph.tar.gz
+
+### get test data, we provide 2 genomes at nt, AA and universal gene level
+wget https://github.com/jean-pierreBoth/gsearch/releases/download/v0.0.12/test_data.tar.gz
+tar xzvf ./test_data.tar.gz
+
 cd ./GTDB_r207_hnsw_graph/nucl
-### request neighbors for nt genomes
-request -b ./ -d query_dir_nt -n 50
-### request neighbors for aa genomes (predicted by Prodigal or FragGeneScanRs)
+### request neighbors for nt genomes (here -n is how many neighbors you want to return for each of your query genome)
+request -b ./ -r ../../test_data/query_dir_nt -n 50
+### or request neighbors for aa genomes (predicted by Prodigal or FragGeneScanRs)
 cd ./GTDB_r207_hnsw_graph/prot
-request -b ./ -d query_dir_aa -n 50 --aa
-### request neighbors for aa universal gene (extracted by hmmer according to hmm files provided)
+request -b ./ -r ../../test_data/query_dir_aa -n 50 --aa
+### or request neighbors for aa universal gene (extracted by hmmer according to hmm files from gtdb, we also provide one in release page)
 cd ./GTDB_r207_hnsw_graph/universal
-request -b ./ -d query_dir_universal_aa -n 50 --aa
+request -b ./ -r ../../test_data/query_dir_universal_aa -n 50 --aa
+
+
+### Building database. database is huge in size, users are welcome to download gtdb database here: (https://data.ace.uq.edu.au/public/gtdb/data/releases/release207/207.0/genomic_files_reps/gtdb_genomes_reps_r207.tar.gz) and here (https://data.ace.uq.edu.au/public/gtdb/data/releases/release207/207.0/genomic_files_reps/gtdb_proteins_aa_reps_r207.tar.gz)
+### build database given genome file directory, fna.gz was expected. L for nt and .faa or .faa.gz for --aa. Limit for k is 32 (15 not work due to compression), for s is 65535 (u16) and for n is 255 (u8)
+tohnsw -d db_dir_nt -s 12000 -k 16 --ef 1600 -n 128
+tohnsw -d db_dir_aa -s 12000 -k 7 --ef 1600 -n 128 --aa
+
+### When there are new genomes  after comparing with the current database (GTDB v207, e.g. ANI < 95% with any genome after searcing, corresponding to 0.9850 ProbMinHash distance), those genomes can be added to the database:
+###must run in the existing database file folder
+cd ./GTDB_r207_hnsw_graph/nucl
+### old .graph,.data and all .json files will be updated to the new one. Then the new one can be used for requesting as an updated database
+tohnsw -d db_dir_nt (new genomes directory) -s 12000 -k 16 --ef 1600 -n 128 --add
+### or add at the amino acid level:
+cd ./GTDB_r207_hnsw_graph/prot
+tohnsw -d db_dir_nt (new genomes directory in AA format predicted by prodigal/FragGeneScanRs) -s 12000 -k 16 --ef 1600 -n 128 --aa --add
 ```
 
 
@@ -62,11 +96,9 @@ request -b ./ -d query_dir_universal_aa -n 50 --aa
 This can be done using the **--features** option as explained below, or by modifying the features section in  Cargo.toml. In that case just fill in the default you want.
 * kmerutils provides a feature "withzmq". This feature can be used to store compressed qualities on a server and run requests. It is not necessary in this crate.
 
-### Simple case for install:
 
-**Pre-built binaries** will be available on release page (https://github.com/jean-pierreBoth/gsearch/releases/tag/v0.0.10) for major platforms. 
 
-Otherwise it is possible to install/compile by yourself:
+# Install
 
 #### First install Rust tools
 
@@ -84,7 +116,7 @@ cargo install gsearch --features="annembed_intel-mkl"
 or with a system installed openblas:
 
 ```bash
-cargo install gsearch --release --features="annembed_openblas-system" 
+cargo install gsearch --features="annembed_openblas-system" 
 ```
  - On MacOS, which requires dynamic library link (you have to install openblas first and then xz, the MacOS/Darwin binary provided also requires this):
 (note that openblas install lib path is different on M1 MACs).  
@@ -152,5 +184,5 @@ We provide pre-built genome/proteome database graph file for bacteria/archaea, v
 
 ## References
 
-1. Jianshu Zhao, Jean Pierre-Both, Luis M. Rodriguez-R and Konstantinos T. Konstantinidis, 2022. GSearch: Ultra-Fast and Scalable Microbial Genome Search by combining Kmer Hashing with Hierarchical Navigable Small World Graphs. *bioRxiv* 2022:2022.2010.2021.513218. [biorxiv](https://www.biorxiv.org/content/10.1101/2022.10.21.513218v1).
+1. Jianshu Zhao, Jean Pierre Both, Luis M. Rodriguez-R and Konstantinos T. Konstantinidis, 2022. GSearch: Ultra-Fast and Scalable Microbial Genome Search by combining Kmer Hashing with Hierarchical Navigable Small World Graphs. *bioRxiv* 2022:2022.2010.2021.513218. [biorxiv](https://www.biorxiv.org/content/10.1101/2022.10.21.513218v2).
 

@@ -242,18 +242,18 @@ fn main() {
         else {
                 println!("could not reload processing state");
         }
-        // reload SeqDict
-        let mut seqname = database_dir.clone();
-        seqname.push_str("/seqdict.json");
-        log::info!("\n reloading sequence dictionary from {}", &seqname);
-        let seqdict = SeqDict::reload(&seqname);
+        // reload SeqDict        
+        let seqname = Path::new(&database_dir);
+        let seqname = seqname.join("seqdict.json");
+        log::info!("\n reloading sequence dictionary from {}", &seqname.display());
+        let seqdict = SeqDict::reload_json(&seqname);
         let seqdict = match seqdict {
             Ok(seqdict ) => seqdict ,
             _ => {
-                panic!("SeqDict reload from dump file  {} failed", seqname);
+                panic!("SeqDict reload from dump file  {} failed", seqname.display());
             }            
         };
-        log::info!("reloading sequence dictionary from {} done", &seqname);
+        log::info!("reloading sequence dictionary from {} done", &seqname.display());
         // we have everything we want...
         match data_type {
             DataType::DNA => {

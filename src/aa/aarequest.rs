@@ -1,4 +1,4 @@
-//! gathers rna request stuf
+//! gathers amino acid request stuf
 //! 
 //! 
 

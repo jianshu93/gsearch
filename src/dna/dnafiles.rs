@@ -2,7 +2,7 @@
 //! 
 
 
-use std::fs::{self, DirEntry};
+use std::path::PathBuf;
 
 use crate::utils::{idsketch::*};
 use crate::utils::{parameters::*};
@@ -37,15 +37,14 @@ pub fn filter_out_n(seq : &[u8]) -> Vec<u8> {
 /// opens parse fna files with needletail
 /// extracts records , filters out capsid and send sequences to function process_dir to execute file_task to produce sequence
 /// for any client
-pub fn process_file_by_sequence(file : &DirEntry, filter_params : &FilterParams)  -> Vec<IdSeq> {
+pub fn process_file_by_sequence(pathb : &PathBuf, filter_params : &FilterParams)  -> Vec<IdSeq> {
     let mut to_sketch = Vec::<IdSeq>::new();
     //
-    let pathb = file.path();
     log::trace!("processing file {}", pathb.to_str().unwrap());
     let mut reader = needletail::parse_fastx_file(&pathb).expect("expecting valid filename");
     while let Some(record) = reader.next() {
         if record.is_err() {
-            println!("got bd record in file {:?}", file.file_name());
+            println!("got bd record in file {:?}", pathb.file_name().unwrap());
             std::process::exit(1);
         }
         // do we keep record ? we must get its id
@@ -76,12 +75,11 @@ pub fn process_file_by_sequence(file : &DirEntry, filter_params : &FilterParams)
 /// opens parse fna files with needletail
 /// extracts records , filters out capsid and send sequences to function process_dir to execute file_task to produce sequence
 /// for any client
-pub fn process_file_in_one_block(file : &DirEntry, filter_params : &FilterParams)  -> Vec<IdSeq> {
+pub fn process_file_in_one_block(pathb : &PathBuf, filter_params : &FilterParams)  -> Vec<IdSeq> {
     let mut to_sketch = Vec::<IdSeq>::new();
     //
-    let pathb = file.path();
     log::trace!("processing file {}", pathb.to_str().unwrap());
-    let metadata = fs::metadata(pathb.clone());
+    let metadata = std::fs::metadata(pathb.clone());
     let f_len : usize;
     match metadata {
         Ok(metadata) => { f_len = metadata.len() as usize;
@@ -93,14 +91,15 @@ pub fn process_file_in_one_block(file : &DirEntry, filter_params : &FilterParams
         }
     }
     log::trace!("processing file {}", pathb.to_str().unwrap());
-    let mut reader = needletail::parse_fastx_file(&pathb).expect("expecting valid filename");
+    let bufread = std::io::BufReader::with_capacity(5_000_000,std::fs::File::open(pathb).unwrap());
+    let mut reader = needletail::parse_fastx_reader(bufread).expect("expecting valid filename");
     // We allocate one large block tht will contain the whole filtered genome. 
     // TODO We should get the file length to optimize the length
     let mut one_block_seq = Vec::<u8>::with_capacity(f_len as usize);
     //
     while let Some(record) = reader.next() {
         if record.is_err() {
-            println!("got bd record in file {:?}", file.file_name());
+            println!("got bd record in file {:?}", pathb.file_name().unwrap());
             std::process::exit(1);
         }
         // do we keep record ? we must get its id
@@ -131,17 +130,61 @@ pub fn process_file_in_one_block(file : &DirEntry, filter_params : &FilterParams
 
 
 
+
+/// This function will parse with needletail (and do the decompressing) the whole bytes of file pathb contained in  bufread.
+/// In this way process_buffer_in_one_block do not have any IO to do and we can // the fasta parsing without disk constraints.
+/// We nevertheless needs pathb to fill in IdSeq
+pub fn process_buffer_in_one_block(pathb : &PathBuf, bufread : &[u8], filter_params : &FilterParams)  -> Vec<IdSeq> {
+    //
+    let mut to_sketch = Vec::<IdSeq>::new();
+    //
+    let mut reader = needletail::parse_fastx_reader(bufread).expect("expecting valid filename");
+    // We allocate one large block tht will contain the whole filtered genome. 
+    // TODO We should get the file length to optimize the length
+    let mut one_block_seq = Vec::<u8>::new();
+    //
+    while let Some(record) = reader.next() {
+        if record.is_err() {
+            println!("process_buffer_in_one_block : got bd record in buffer");
+            std::process::exit(1);
+        }
+        // do we keep record ? we must get its id
+        let seqrec = record.expect("invalid record");
+        let id = seqrec.id();
+        let strid = String::from_utf8(Vec::from(id)).unwrap();
+        // process sequence if not capsid and not filtered out, in block mode we do not filter any at the moment
+        let _filter = filter_params.filter(&seqrec.seq());
+        if strid.find("capsid").is_none() {
+            // Our Kmers are 2bits encoded so we need to be able to encode sequence in 2 bits, so there is 
+            // this hack,  causing reallocation. seqrec.seq is Cow so drain does not seem an option.
+            one_block_seq.append(&mut filter_out_n(&seqrec.seq()));
+            // recall rank is set in process_dir beccause we should a have struct gatheing the 2 functions process_dir and process_file
+            if log::log_enabled!(log::Level::Trace) {
+                log::trace!("process_file, nb_sketched {} ", to_sketch.len());
+            }
+        }
+    }
+    // we are at end of file, we have one large sequence for the whole file
+    // we have DNA seq for now
+    let new_seq = Sequence::new(&one_block_seq,2);
+    let seqwithid = IdSeq::new(pathb.to_str().unwrap().to_string(), String::from("total sequence"), SequenceType::SequenceDNA(new_seq));
+    to_sketch.push(seqwithid);
+    // we must send to_sketch to some sketcher
+    to_sketch
+}  // end of process_buffer_in_one_block
+
+
+
 /// opens parse fna files with needletail
 /// extracts records , concat in a whole block and split in equal parts.
 /// The split is done in 10 segments (hard coded at present time)
 /// filters out capsid and send sequences to function process_dir to execute file_task to produce sequences
 /// for any client
-pub fn process_file_concat_split(file : &DirEntry, filter_params : &FilterParams)  -> Vec<IdSeq> {
+pub fn process_file_concat_split(pathb : &PathBuf, filter_params : &FilterParams)  -> Vec<IdSeq> {
     let mut to_sketch = Vec::<IdSeq>::new();
     //
-    let pathb = file.path();
     log::trace!("processing file {}", pathb.to_str().unwrap());
-    let metadata = fs::metadata(pathb.clone());
+    let metadata = std::fs::metadata(pathb.clone());
     let f_len : usize;
     match metadata {
         Ok(metadata) => { f_len = metadata.len() as usize;
@@ -159,7 +202,7 @@ pub fn process_file_concat_split(file : &DirEntry, filter_params : &FilterParams
     //
     while let Some(record) = reader.next() {
         if record.is_err() {
-            println!("got bd record in file {:?}", file.file_name());
+            println!("got bd record in file {:?}", pathb.as_path());
             std::process::exit(1);
         }
         // do we keep record ? we must get its id
