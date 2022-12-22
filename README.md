@@ -26,20 +26,34 @@ takes a list of fasta files containing requests and for each fasta file dumps th
 ## Usage
 ## Simple case for install:
 
-**Pre-built binaries** will be available on release page (https://github.com/jianshu93/gsearch/releases/tag/v0.1.0) for major platforms (no need to install but just download and make it executable). We recommend you use the linux one (GSearch_Linux_x86-64_intel-mkl-static.zip
-) in this release page for convenience because the only dependency is GCC (Recent Linux version does not allow static compiling of GCC libraries like libc.so.6).
+**Pre-built binaries** will be available on release page (https://github.com/jean-pierreBoth/gsearch/releases/tag/v0.0.12) for major platforms (no need to install but just download and make it executable). We recommend you use the linux one (GSearch_Linux_x86-64_intel-mkl-static.zip
+) for linux system in this release page for convenience because the only dependency is GCC (Recent Linux version does not allow static compiling of GCC libraries like libc.so.6). For macOS, we recommend the universal binary (https://github.com/jean-pierreBoth/gsearch/releases/download/v0.0.12/GSearch_darwin_universal.zip) for any macOS platform (x86-64 or arm64).
 
 Otherwise it is possible to install/compile by yourself (see install section)
 
 
 ```bash
-### get the binary (make sure you have recent GCC installed):
+### get the binary for linux (make sure you have recent Linux installed with GCC, e.g., Ubuntu 18.0.4 or above):
+
 wget https://github.com/jean-pierreBoth/gsearch/releases/download/v0.0.12/GSearch_Linux_x86-64_intel-mkl-static.zip
 unzip GSearch_Linux_x86-64_intel-mkl-static.zip
+
+## get the binary for macOS:
+wget https://github.com/jean-pierreBoth/gsearch/releases/download/v0.0.12/GSearch_darwin_universal.zip
+unzip GSearch_darwin_universal.zip
+
+### make it excutable (changed it accordingly on macOS)
 chmod a+x ./GSearch_Linux_x86-64_intel-mkl-static/*
 ### put it under your system/usr bin directory (/usr/local/bin/ as an example) where it can be called:
-cp ./GSearch_Linux_x86-64_intel-mkl-static/* /usr/local/bin/
+mv ./GSearch_Linux_x86-64_intel-mkl-static/* /usr/local/bin/
 ### check install
+tohnsw -h
+request -h
+
+### check install MacOS, you may need to change the system setup to allow external binary to run by type the following first and use your admin password:
+
+sudo spctl --master-disable
+### and then 
 tohnsw -h
 request -h
 

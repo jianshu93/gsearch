@@ -1,4 +1,4 @@
-//! module gathering amino acid sketching and request
+//! module gathering amino acid (AA) sketching and request
 
 
 pub mod aafiles;

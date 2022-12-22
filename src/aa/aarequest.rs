@@ -1,4 +1,4 @@
-//! gathers amino acid request stuf
+//! gathers amino acid (AA) request stuff
 //! 
 //! 
 

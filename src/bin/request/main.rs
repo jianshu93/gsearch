@@ -242,7 +242,7 @@ fn main() {
         else {
                 println!("could not reload processing state");
         }
-        // reload SeqDict        
+        // reload SeqDict
         let seqname = Path::new(&database_dir);
         let seqname = seqname.join("seqdict.json");
         log::info!("\n reloading sequence dictionary from {}", &seqname.display());

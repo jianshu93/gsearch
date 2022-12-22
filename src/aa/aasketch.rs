@@ -1,4 +1,4 @@
-//! amino acid (20 AAs) sketching
+//! amino acid (AA) sketching
 
 
 use std::time::{SystemTime};
