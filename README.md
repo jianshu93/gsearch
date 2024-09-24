@@ -5,6 +5,8 @@
 ![](https://anaconda.org/bioconda/gsearch/badges/platforms.svg)
 [![DOI](https://zenodo.org/badge/187937357.svg)](https://doi.org/10.5281/zenodo.10543594)
 
+![Alt!](https://github.com/jean-pierreBoth/gsearch/blob/master/GSearch_art.jpg?raw=true)
+
 # GSearch: Ultra-fast and Scalable Genome Search based on Various MinHash-like Metrics and HNSW
 
 ![Alt!](https://github.com/jean-pierreBoth/gsearch/blob/master/GSearch-logo.jpg?raw=true)
@@ -261,6 +263,13 @@ We provide a bunch of scripts to allow split database genomes into N pieces and 
 ```
 ## Database clustering via CoreSet construction for large databases
 For real world datasets with billions of genomes, in additional to the random split idea mentioned above, approximate clustering via CoreSet can be used via the hnswcore command:
+```bash
+### for linux, you will also need to download the pre-compiled binary, for macOS brew install will be ok
+
+wget https://github.com/jianshu93/coreset/releases/download/v0.1.0/hnswcore_Linux_x86-64_v0.1.0.zip
+unzip hnswcore_Linux_x86-64_v0.1.0.zip
+chmod a+x ./hnswcore
+```
 
 ```bash
 hnswcore -h
