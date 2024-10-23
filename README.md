@@ -8,8 +8,22 @@
 ![Alt!](https://github.com/jean-pierreBoth/gsearch/blob/master/GSearch_art.jpg?raw=true)
 
 # GSearch: Ultra-fast and Scalable Genome Search based on Various MinHash-like Metrics and HNSW
+<div align="center">
+  <img width="50%" src ="GSearch-logo.jpg">
+</div>
 
-![Alt!](https://github.com/jean-pierreBoth/gsearch/blob/master/GSearch-logo.jpg?raw=true)
+## quick install on Linux
+```bash
+### pre-combiled binary
+wget https://github.com/jean-pierreBoth/gsearch/releases/download/v0.1.5/gsearch_Linux_x86-64_v0.1.5.zip
+unzip gsearch_Linux_x86-64_v0.1.5.zip
+chmod a+x ./gsearch_Linux_x86-64_v0.1.5/*
+cd gsearch_Linux_x86-64_v0.1.5
+./gsearch -h
+
+### Install via bioconda (hmmsearch_rs and hnswcore not available for now)
+conda install -c conda-forge -c bioconda gsearch
+```
 
 GSearch stands for **genomic search**.  
 
@@ -345,7 +359,7 @@ Salmonella_bongori_Type-NCTC12419	./refs/S_bongoriType_NCTC12419.fasta
     conda create -n python38 python=3.8
     conda activate python38
     conda config --add channels bioconda
-    conda install gsearch -c bioconda
+    conda install -c conda-forge -c bioconda gsearch
     gsearch -h
 ```
 ## or if you are on MacOS and have homebrew installed
