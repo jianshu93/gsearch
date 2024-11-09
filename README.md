@@ -377,12 +377,12 @@ Otherwise it is possible to install/compile by yourself (see install section)
 
 ### get the binary for linux (make sure you have recent Linux installed with GCC, e.g., Ubuntu 18.0.4 or above)
 
-wget https://github.com/jean-pierreBoth/gsearch/releases/download/v0.1.5/gsearch_Linux_x86-64_v0.1.5.zip --no-check-certificate
+wget https://github.com/jianshu93/gsearch/releases/download/v0.2.2/gsearch_Linux_x86-64_v0.1.5.zip --no-check-certificate
 unzip gsearch_Linux_x86-64_v0.1.5.zip
 cd gsearch_Linux_x86-64_v0.1.5
 
 ## get the binary for macOS (universal)
-wget https://github.com/jean-pierreBoth/gsearch/releases/download/v0.1.5/gsearch_Darwin_universal_v0.1.5.tar.gz --no-check-certificate
+wget https://github.com/jianshu93/gsearch/releases/download/v0.2.2/gsearch_Darwin_universal_v0.1.5.tar.gz --no-check-certificate
 tar -xzvf gsearch_Darwin_universal_v0.1.5.tar.gz
 
 
