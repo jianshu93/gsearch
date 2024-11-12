@@ -11,7 +11,7 @@ description = "genome classification, probminhash hnsw, genome search"
 
 [[bin]]
 
-name = "gsearchbin"
+name = "gsearch"
 path = "src/bin/gsearch.rs"
 
 [[bin]]
@@ -25,7 +25,7 @@ name = "superani"
 path = "src/bin/superani.rs"
 
 [[bin]]
-name = "FragGeneScanRs"
+name = "FragGeneScan"
 path = "src/bin/FragGeneScanRs.rs"
 
 ##[[bin]]
