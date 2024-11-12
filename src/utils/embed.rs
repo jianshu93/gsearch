@@ -7,8 +7,8 @@ use csv::Writer;
 
 // our use
 use hnsw_rs::prelude::*;
-use annembed::fromhnsw::{hubness::Hubness,kgraph_from_hnsw_all};
-use annembed::prelude::*;
+use annembed_gsearch::fromhnsw::{hubness::Hubness,kgraph_from_hnsw_all};
+use annembed_gsearch::prelude::*;
 
 
 pub fn get_graph_stats_embed<T, D>(hnsw: &Hnsw<T, D>, embed: bool, embed_params_opt : Option<EmbedderParams>) -> Result<(), ()>
