@@ -1,0 +1,3 @@
+[submodule "coreset"]
+	path = coreset
+	url = https://github.com/jean-pierreBoth/coreset
