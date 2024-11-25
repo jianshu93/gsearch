@@ -1,3 +1,12 @@
 [submodule "coreset"]
 	path = coreset
 	url = https://github.com/jean-pierreBoth/coreset
+[submodule "adas"]
+	path = adas
+	url = https://github.com/jianshu93/adas
+[submodule "hmmsearch_rs"]
+	path = hmmsearch_rs
+	url = https://github.com/jianshu93/hmmsearch_rs
+[submodule "hypermash"]
+	path = hypermash
+	url = https://github.com/jianshu93/hypermash
