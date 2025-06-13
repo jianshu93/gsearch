@@ -33,7 +33,7 @@ If you find GSearch useful, please cite the following paper:
 ## Quick install on Linux (Stable version)
 ### Install via bioconda
 ```bash
-conda install -c conda-forge -c bioconda gsearch
+conda install -c conda-forge -c bioconda gsearch=0.2.2
 ```
 
 ### pre-combiled binary
@@ -48,7 +48,7 @@ cd gsearch_Linux_x86-64_v0.1.5
 ## Install developmental version (Linux)
 Note that pre-built databases will not work for development version, you need to rebuild database yourself
 ```bash
-conda install -c bioconda -c conda-forge gsearch=0.2.8
+conda install -c bioconda -c conda-forge gsearch=0.2.4
 
 ##or via cargo, install cargo:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -62,7 +62,7 @@ cargo install gsearch --features annembed_intel-mkl,simdeez_f --force
 
 GSearch stands for **genomic search**.  
 
-This package (**currently in development**) compute MinHash-like signatures of  bacteria and archaea (or virus and fungi) genomes and stores the id of bacteria and MinHash-like signatures in a HNSW structure for searching of new request genomes. The HNSW structure can also be reduced to a flat NSW (also knonw as HubNSW) for better space requirement and accuracy for high-dimension datasets. A total of ~50,000 to ~60,000 lines of highly optimized Rust code were provided in this repo and several other crates/libraries develped for this repo, such as [kmerutils](https://github.com/jean-pierreBoth/kmerutils), [probminhash](https://github.com/jean-pierreBoth/probminhash), [hnswlib-rs](https://github.com/jean-pierreBoth/hnswlib-rs) and [annembed](https://github.com/jean-pierreBoth/annembed), see below for details. Some of the libraries are very popular and have been used about ~70 thousand times, see [here](https://crates.io/crates/hnsw_rs).
+This package (**currently in development**) compute MinHash-like signatures of  bacteria and archaea (or virus and fungi) genomes and stores the id of bacteria and MinHash-like signatures in a HNSW structure for searching of new request genomes. The HNSW structure can also be reduced to a flat NSW (also knonw as HubNSW) for better space requirement and accuracy for high-dimension datasets. A total of ~50,000 to ~60,000 lines of highly optimized Rust code were provided in this repo and several other crates/libraries develped for this repo, such as [kmerutils](https://github.com/jean-pierreBoth/kmerutils), [probminhash](https://github.com/jean-pierreBoth/probminhash), [hnswlib-rs](https://github.com/jean-pierreBoth/hnswlib-rs) and [annembed](https://github.com/jean-pierreBoth/annembed), see below for details. Some of the libraries are very popular and have been used about ~50 thousand times, see [here](https://crates.io/crates/hnsw_rs).
 
 This package is developped by Jean-Pierre Both [jpboth](https://github.com/jean-pierreBoth) for the software part and [Jianshu Zhao](https://github.com/jianshu93) for the genomics part. We also created a mirror of this repo on [GitLab](https://gitlab.com/Jianshu_Zhao/gsearch) and [Gitee](https://gitee.com/jianshuzhao/gsearch) (You need to log in first to see the content), just in case Github service is not available in some region.
 
@@ -245,6 +245,58 @@ Options:
   -V, --version                    Print version
 ```
 
+## BinDash
+bindash command is the Rust version of BinDash 2 paper.
+```bash
+ ************** initializing logger *****************
+
+Binwise Densified MinHash for Genome/Metagenome/Pangenome Comparisons
+
+Usage: bindash [OPTIONS] --query_list <QUERY_LIST_FILE> --reference_list <REFERENCE_LIST_FILE>
+
+Options:
+  -q, --query_list <QUERY_LIST_FILE>
+          Query genome list file (one FASTA/FNA file path per line, .gz supported)
+  -r, --reference_list <REFERENCE_LIST_FILE>
+          Reference genome list file (one FASTA/FNA file path per line, .gz supported)
+  -k, --kmer_size <KMER_SIZE>
+          K-mer size [default: 16]
+  -s, --sketch_size <SKETCH_SIZE>
+          MinHash sketch size [default: 2048]
+  -d, --densification <DENS_OPT>
+          Densification strategy, 0 = optimal densification, 1 = reverse optimal/faster densification [default: 0]
+  -t, --threads <THREADS>
+          Number of threads to use in parallel [default: 1]
+  -o, --output <OUTPUT_FILE>
+          Output file (defaults to stdout)
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+The input is query genome path and reference genome path and output is ANI between each query and each reference (meta)genome. 
+
+## Hypermash
+hypermash is a memory efficient version of MinHash, which relies on the hyperminhash algorithm. It can be use for comparing large metagenomes without consuming large amount of memory.
+
+```bash
+************** initializing logger *****************
+
+Fast and Memory Efficient Genome/Metagenome Sketching via HyperMinhash
+
+Usage: hypermash [OPTIONS] --query_file <query_files> --ref_file <reference_files> --kmer <kmer_length> --output <output_file>
+
+Options:
+  -q, --query_file <query_files>    A list of query (meta)genome files, one per line with .gz/.bzip2/.xz/.zstd support, can be fastq or fasta
+  -r, --ref_file <reference_files>  A list of reference (meta)genome files, one per line with .gz/.bzip2/.xz/.zstd support, can be fastq or fasta
+  -k, --kmer <kmer_length>          Kmer length to use for sketching
+  -t, --threads <THREADS>           Number of threads to use in parallel [default: 1]
+  -o, --output <output_file>        Output file path
+  -h, --help                        Print help
+  -V, --version                     Print version
+
+```
+The input is query genome path and reference genome path and output is ANI between each query and each reference (meta)genome. 
 
 ## SuperANI
 Additional ANI calculation (if you do not want to use MinHash estimated ANI) for the query genomes and nearest neighbor genomes can be performed via the program superani:
