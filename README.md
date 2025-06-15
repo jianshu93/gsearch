@@ -126,8 +126,7 @@ The sketching of reference genomes and HNSW graph database building can take som
 - A Hnsw structure storing rank of data processed and corresponding sketches.
 - A Dictionary associating each rank to a fasta id and fasta filename.
 
-The Hnsw structure is dumped *in hnswdump.hnsw.graph* and  *hnswdump.hnsw.data*
-The Dictionary is dumped in a json file *seqdict.json*
+The Hnsw structure is dumped *in hnswdump.hnsw.graph* and  *hnswdump.hnsw.data*. The Dictionary is dumped in a json file *seqdict.json*. HNSW and sketching parameters can be found in *parameters.json* while file processing information can be found in *processing_state.json*.
 
 ```bash
  ************** initializing logger *****************
@@ -147,6 +146,16 @@ Options:
       --aa                    --aa Specificy amino acid processing, require no value
       --block                 --block : sketching is done concatenating sequences
   -h, --help                  Print help
+
+```
+5 files will be created in current directory (you can create a new directory and run tohnsw command).
+```bash
+$ ls -lhs
+9.7G -rwxrwx--x. 1 jzhao399 pace-ktk3 9.7G Jun 13 19:52 hnswdump.hnsw.data
+ 58M -rwxrwx--x. 1 jzhao399 pace-ktk3  58M Jun 13 18:34 hnswdump.hnsw.graph
+4.0K -rwxrwx--x. 1 jzhao399 pace-ktk3  180 Jun 13 18:33 parameters.json
+4.0K -rwxrwx--x. 1 jzhao399 pace-ktk3   55 Jun 13 18:33 processing_state.json
+ 15M -rwxrwx--x. 1 jzhao399 pace-ktk3  15M Jun 13 18:33 seqdict.json
 
 ```
 
