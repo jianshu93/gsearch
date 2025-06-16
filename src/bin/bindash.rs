@@ -95,22 +95,15 @@ where
 /// Computes the distance between two sketches (as `Vec<f32>`) based on
 /// Hamming in the densified sketches, then uses your transformation:
 ///
-///    `distance = -ln( (2*j) / (1 + j) ) / kmer_size`.
+///    `distance = ( (2*j) / (1 + j) ) ^(1/k)`.
 fn compute_distance(query_sig: &[f32], reference_sig: &[f32], kmer_size: usize) -> f64 {
-    let dist_hamming = DistHamming;
-    let hamming_distance = dist_hamming.eval(query_sig, reference_sig);
-    let hamming_distance = if hamming_distance == 0.0 {
-        std::f32::EPSILON // Use a small value close to zero
-    } else {
-        hamming_distance
-    };
-    // Jaccard from Hamming
-    let j = 1.0 - hamming_distance;
-    let numerator = 2.0 * j;
-    let denominator = 1.0 + j;
-    let fraction = (numerator as f64) / (denominator as f64);
+    let dist_hamming      = DistHamming;
+    let hamming_distance  = dist_hamming.eval(query_sig, reference_sig);     // ∈ [0, 1]
 
-    -fraction.ln() / (kmer_size as f64)
+    let j   = 1.0 - hamming_distance;              // Jaccard-from-Hamming
+    let frac = 2.0 * j / (1.0 + j);                // 2J / (1+J)
+
+    frac.powf(1.0 / kmer_size as f32) as f64       // (2J/(1+J))^(1/k)
 }
 
 fn write_results(
