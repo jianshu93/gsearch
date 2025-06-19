@@ -78,7 +78,7 @@ path = "src/bin/hnsw2knn.rs"
 
 [[bin]]
 
-name = "bindash"
+name = "bindash-rs"
 path = "src/bin/bindash.rs"
 
 
