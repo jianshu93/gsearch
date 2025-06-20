@@ -198,7 +198,7 @@ Options:
 
 A tabular file will be saved to disk in current directory (gsearch.neighbors.txt) with 3 key columns: query genome path, database genome path (ranked by distance) and distance. The distance can be transformed into ANI or AAI according to the equation above. We provide the program reformat (also parallel implementation) to do that: 
 ```bash
-reformat -h
+$ reformat -h
 Processes input files for ANI calculation
 
 Usage: reformat <kmer> <model> <input_file> <output_file>
@@ -242,7 +242,7 @@ We also provide scripts for analyzing output from request and compare with other
 ## hnsw2knn
 Extract nearest neighbor genomes in the pre-built database. For each genome, nearest neighbor genomes to it will printed from samllest distance (largest ANI) to largest distance (smallest ANI)
 ```bash
-$hnsw2knn -h
+$ hnsw2knn -h
 
  ************** initializing logger *****************
 
@@ -258,9 +258,10 @@ Options:
   -V, --version                    Print version
 ```
 
-## BinDash
+## BinDash-rs
 bindash command is the Rust version of BinDash 2 paper.
 ```bash
+$ bindash-rs --help
  ************** initializing logger *****************
 
 Binwise Densified MinHash for Genome/Metagenome/Pangenome Comparisons
@@ -293,6 +294,7 @@ The input is query genome path and reference genome path and output is ANI betwe
 hypermash is a memory efficient version of MinHash, which relies on the hyperminhash algorithm. It can be use for comparing large metagenomes without consuming large amount of memory.
 
 ```bash
+$ hypermash --help
 ************** initializing logger *****************
 
 Fast and Memory Efficient Genome/Metagenome Sketching via HyperMinhash
