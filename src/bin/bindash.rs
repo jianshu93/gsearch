@@ -95,7 +95,7 @@ fn compute_distance(query_sig: &[f32], reference_sig: &[f32], kmer_size: usize) 
     let hamming_distance = dist_hamming.eval(query_sig, reference_sig);
     let j   = 1.0 - hamming_distance;              // Jaccard-from-Hamming
     let frac = 2.0 * j / (1.0 + j);                // 2J / (1+J)
-    frac.powf(1.0 / kmer_size as f32) as f64       // (2J/(1+J))^(1/k)
+    1.0f64 - frac.powf(1.0 / kmer_size as f32) as f64       // (2J/(1+J))^(1/k)
 }
 
 fn write_results(
