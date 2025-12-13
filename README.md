@@ -454,7 +454,7 @@ hnswcore --dir ./ --fname hnswdump --type f32 coreset --cluster 5
 3. Use the dictjsontocsv.ipynb python notebook in scripts folder to transfrom the cluster membership information id in HNSW to actual genome id.
 
 ## Seqeunce search
-We also provide general purpose sequence search via BigSig(BItsliced Genomic Signature Index), which can be used to quickly identify reads against a reference genome database.
+We also provide general purpose sequence search via BigSig(BItsliced Genomic Signature Index) based on kmers or minimizers, which can be used to quickly identify reads against a reference genome database.
 ```bash
  ************** initializing logger *****************
 
@@ -465,7 +465,6 @@ Usage: bigsig [COMMAND]
 Commands:
   construct  Construct a BIGSIG
   query      Query a BIGSIG on one or more fasta/fastq.gz files
-  identify   Identify reads based on probability
   help       Print this message or the help of the given subcommand(s)
 
 Options:
