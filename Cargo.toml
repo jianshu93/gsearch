@@ -1,6 +1,6 @@
 [package]
 name = "gsearch"
-version = "0.1.6"
+version = "0.3.2"
 authors = ["jeanpierre.both@gmail.com", "jianshuzhao@yahoo.com"]
 repository = "https://github.com/jean-pierreBoth/gsearch"
 keywords = ["hnsw", "probminhash", "bacteria"]

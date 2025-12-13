@@ -238,7 +238,7 @@ fn main() {
     let _ = env_logger::Builder::from_default_env().init();
 
     let matches = Command::new("BinDash")
-        .version("0.3.1")
+        .version("0.3.2")
         .about("Binwise Densified MinHash for Genome/Metagenome/Pangenome Comparisons")
         .arg(
             Arg::new("query_list")
