@@ -299,7 +299,7 @@ fn main() {
     //
     let coresetcmd = Command::new("coreset")
         .about("Coreset approximate clustering")
-        .version("0.3.2")
+        .version("0.3.3")
         .arg(
             Arg::new("beta")
                 .required(false)

@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _ = env_logger::Builder::from_default_env().init();
 
     let matches = Command::new("Genome Sketching via HyperMinHash")
-        .version("0.3.2")
+        .version("0.3.3")
         .about("Fast and Memory Efficient Genome/Metagenome Sketching via HyperMinhash")
         .arg(
             Arg::new("query_files")
