@@ -122,7 +122,8 @@ hnsw_rs = { version = "0.3" }
 probminhash = { version = "0.1"}
 
 # kmerutils = { path = "../kmerutils" }
-kmerutils = { git = "https://github.com/jean-pierreBoth/kmerutils" }
+# kmerutils = { git = "https://github.com/jean-pierreBoth/kmerutils" }
+kmerutils = { git = "https://github.com/jianshu93/kmerutils" }
 # kmerutils = {git = "https://gitlab.com/jpboth/kmerutils.git"}
 # kmerutils = { version = "0.0.14" }
 

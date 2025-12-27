@@ -1,4 +1,5 @@
 use clap::{Arg, ArgAction, Command};
+use env_logger;
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
 use std::collections::HashMap;
@@ -11,8 +12,14 @@ use needletail::{parse_fastx_file, Sequence};
 use num;
 
 use kmerutils::base::{
-    alphabet::Alphabet2b, kmergenerator::*, sequence::Sequence as SequenceStruct, CompressedKmerT,
-    Kmer16b32bit, Kmer32bit, Kmer64bit, KmerBuilder,
+    alphabet::Alphabet2b,
+    kmergenerator::*,
+    sequence::Sequence as SequenceStruct,
+    CompressedKmerT,
+    Kmer16b32bit,
+    Kmer32bit,
+    Kmer64bit,
+    KmerBuilder,
 };
 use kmerutils::sketcharg::{DataType, SeqSketcherParams, SketchAlgo};
 use kmerutils::sketching::setsketchert::{
@@ -21,7 +28,7 @@ use kmerutils::sketching::setsketchert::{
     SeqSketcherT, // trait
 };
 
-use anndists::dist::{DistHamming, Distance};
+use anndists::dist::{Distance, DistHamming};
 
 /// Converts ASCII-encoded bases (from Needletail) into our `SequenceStruct`.
 fn ascii_to_seq(bases: &[u8]) -> Result<SequenceStruct, ()> {
@@ -45,20 +52,19 @@ fn read_genome_list(filepath: &str) -> Vec<String> {
 /// `SeqSketcherT` and a k-mer hash function. Returns a `HashMap` from file path
 /// to the single sketch vector.
 ///
-/// ### **Key**: The `sketcher` reference now has `+ Sync` so it can be shared
-/// across threads. We also pass `kmer_hash_fn` by value (requires `Copy + Send + Sync`).
+/// IMPORTANT:
+/// - We still *initialize* OptDens/RevOptDens with `S = f32`
+/// - BUT the `Sig` type returned by your kmerutils OptDensHashSketch/RevOptDensHashSketch
+///   is `u64`, so we store `Vec<u64>`.
 fn sketch_files<Kmer, F>(
     file_paths: &[String],
-    sketcher: &(impl SeqSketcherT<Kmer, Sig = f32> + Sync),
+    sketcher: &(impl SeqSketcherT<Kmer, Sig = u64> + Sync),
     kmer_hash_fn: F,
-) -> HashMap<String, Vec<f32>>
+) -> HashMap<String, Vec<u64>>
 where
-    // Required for using `SeqSketcherT` with Kmer
     Kmer: CompressedKmerT + KmerBuilder<Kmer> + Send + Sync,
     <Kmer as CompressedKmerT>::Val: num::PrimInt + Send + Sync + Debug,
     KmerGenerator<Kmer>: KmerGenerationPattern<Kmer>,
-
-    // The function or closure must be Copy + Send + Sync to work in parallel
     F: Fn(&Kmer) -> <Kmer as CompressedKmerT>::Val + Send + Sync + Copy,
 {
     file_paths
@@ -77,65 +83,71 @@ where
             // Prepare references
             let sequences_ref: Vec<&SequenceStruct> = sequences.iter().collect();
 
-            // We call the sketcher method
+            // sketch_compressedkmer_seqs returns Vec<Vec<Sig>> and inner vec has size 1 (per kmerutils design)
             let signature = sketcher.sketch_compressedkmer_seqs(&sequences_ref, kmer_hash_fn);
 
-            // Return the single signature for the file
             (path.clone(), signature[0].clone())
         })
-        .collect::<HashMap<String, Vec<f32>>>()
+        .collect()
 }
 
-/// Computes the distance between two sketches (as `Vec<f32>`) based on
-/// Hamming in the densified sketches, then uses your transformation:
+/// Computes the distance between two sketches (as `Vec<u64>`) using DistHamming,
+/// then applies your transformation:
 ///
-///    `distance = -ln( (2*j) / (1 + j) ) / kmer_size`.
-fn compute_distance(query_sig: &[f32], reference_sig: &[f32], kmer_size: usize) -> f64 {
+///    distance = -ln( (2*j) / (1 + j) ) / kmer_size
+///
+/// where j = 1 - hamming_distance (assuming DistHamming returns normalized distance).
+fn compute_distance(query_sig: &[u64], reference_sig: &[u64], kmer_size: usize) -> f64 {
     let dist_hamming = DistHamming;
-    let hamming_distance = dist_hamming.eval(query_sig, reference_sig);
-    let j   = 1.0 - hamming_distance;              // Jaccard-from-Hamming
-    let frac = 2.0 * j / (1.0 + j);                // 2J / (1+J)
-    1.0f64 - frac.powf(1.0 / kmer_size as f32) as f64       // (2J/(1+J))^(1/k)
+
+    // DistHamming::eval returns an f32 in many implementations; keep it generic and cast to f64.
+    let h: f64 = dist_hamming.eval(query_sig, reference_sig) as f64;
+
+    // Clamp to [0,1] for safety
+    let h = if h <= 0.0 { 0.0 } else if h >= 1.0 { 1.0 } else { h };
+
+    // Jaccard from Hamming similarity
+    let mut j = 1.0 - h;
+
+    // guard against j=0 => ln(0)
+    if j <= 0.0 {
+        j = f64::MIN_POSITIVE;
+    }
+
+    let fraction = (2.0 * j) / (1.0 + j);
+    -fraction.ln() / (kmer_size as f64)
 }
 
 fn write_results(
     output: Option<String>,
     query_genomes: &[String],
     reference_genomes: &[String],
-    query_sketches: &HashMap<String, Vec<f32>>,
-    reference_sketches: &HashMap<String, Vec<f32>>,
+    query_sketches: &HashMap<String, Vec<u64>>,
+    reference_sketches: &HashMap<String, Vec<u64>>,
     kmer_size: usize,
 ) {
     let mut output_writer: Box<dyn Write> = match output {
-        Some(filename) => Box::new(BufWriter::new(
-            File::create(&filename).expect("Cannot create output file"),
-        )),
+        Some(filename) => {
+            Box::new(BufWriter::new(File::create(&filename).expect("Cannot create output file")))
+        }
         None => Box::new(BufWriter::new(io::stdout())),
     };
 
     writeln!(output_writer, "Query\tReference\tDistance").expect("Error writing header");
 
-    // 1) Build list of all query/reference pairs
-    //    (Potentially large, but straightforward to parallelize).
     let all_pairs: Vec<(String, String)> = query_genomes
         .iter()
-        .flat_map(|q| {
-            reference_genomes
-                .iter()
-                .map(move |r| (q.clone(), r.clone()))
-        })
+        .flat_map(|q| reference_genomes.iter().map(move |r| (q.clone(), r.clone())))
         .collect();
 
-    // 2) Parallel compute over those pairs
     let results: Vec<(String, String, f64)> = all_pairs
         .into_par_iter()
         .map(|(query_path, reference_path)| {
             let query_signature = &query_sketches[&query_path];
             let reference_signature = &reference_sketches[&reference_path];
 
-            let distance = compute_distance(query_signature, reference_signature, kmer_size);
+            let mut distance = compute_distance(query_signature, reference_signature, kmer_size);
 
-            // If the file basename is the same, consider distance=0.0
             let query_basename = Path::new(&query_path)
                 .file_name()
                 .and_then(|os_str| os_str.to_str())
@@ -146,17 +158,14 @@ fn write_results(
                 .and_then(|os_str| os_str.to_str())
                 .unwrap_or(&reference_path);
 
-            let distance = if query_basename == reference_basename {
-                0.0
-            } else {
-                distance
-            };
+            if query_basename == reference_basename {
+                distance = 0.0;
+            }
 
             (query_path, reference_path, distance)
         })
         .collect();
 
-    // 3) Write out the results (in whatever order they were computed)
     for (q_path, r_path, dist) in results {
         writeln!(output_writer, "{}\t{}\t{:.6}", q_path, r_path, dist)
             .expect("Error writing output");
@@ -168,8 +177,9 @@ fn write_results(
 /// - `dens = 0` => `OptDensHashSketch`
 /// - `dens = 1` => `RevOptDensHashSketch`
 ///
-/// The `kmer_hash_fn` is taken by value (and must be `Copy + Send + Sync`).
-fn sketching_kmer_type<Kmer, F>(
+/// We instantiate the internal minhash with `S = f32`,
+/// but the returned signature type is `u64` (per your kmerutils implementation).
+fn sketching_kmerType<Kmer, F>(
     query_genomes: &[String],
     reference_genomes: &[String],
     sketch_args: &SeqSketcherParams,
@@ -178,22 +188,22 @@ fn sketching_kmer_type<Kmer, F>(
     output: Option<String>,
     kmer_size: usize,
 ) where
-    // The Kmer must meet the constraints for the chosen sketchers
     Kmer: CompressedKmerT + KmerBuilder<Kmer> + Send + Sync,
     <Kmer as CompressedKmerT>::Val: num::PrimInt + Send + Sync + Debug,
     KmerGenerator<Kmer>: KmerGenerationPattern<Kmer>,
-
-    // The hash function must be usable in parallel
     F: Fn(&Kmer) -> <Kmer as CompressedKmerT>::Val + Send + Sync + Copy,
 {
     match dens {
         0 => {
-            // dens=0 => "optimal" densification
             let sketcher = OptDensHashSketch::<Kmer, f32>::new(sketch_args);
-            println!("Sketching query genomes with Optimal Densification MinHash...");
+            println!(
+                "Sketching query genomes with OptDens (internal f32, output u64 signature)..."
+            );
             let query_sketches = sketch_files(query_genomes, &sketcher, kmer_hash_fn);
 
-            println!("Sketching reference genomes Optimal Densification MinHash...");
+            println!(
+                "Sketching reference genomes with OptDens (internal f32, output u64 signature)..."
+            );
             let reference_sketches = sketch_files(reference_genomes, &sketcher, kmer_hash_fn);
 
             println!("Performing pairwise comparisons...");
@@ -207,12 +217,15 @@ fn sketching_kmer_type<Kmer, F>(
             );
         }
         1 => {
-            // dens=1 => "reverse optimal" densification
             let sketcher = RevOptDensHashSketch::<Kmer, f32>::new(sketch_args);
-            println!("Sketching query genomes with Reverse Optimal Densification MinHash...");
+            println!(
+                "Sketching query genomes with RevOptDens (internal f32, output u64 signature)..."
+            );
             let query_sketches = sketch_files(query_genomes, &sketcher, kmer_hash_fn);
 
-            println!("Sketching reference genomes with Revse Optimal Densification MinHash...");
+            println!(
+                "Sketching reference genomes with RevOptDens (internal f32, output u64 signature)..."
+            );
             let reference_sketches = sketch_files(reference_genomes, &sketcher, kmer_hash_fn);
 
             println!("Performing pairwise comparisons...");
@@ -225,20 +238,16 @@ fn sketching_kmer_type<Kmer, F>(
                 kmer_size,
             );
         }
-        _ => {
-            panic!("Only densification = 0 or 1 are supported!");
-        }
+        _ => panic!("Only densification = 0 or 1 are supported!"),
     }
 }
 
-/// Main entry point of the program.
 fn main() {
-    // Initialize logger
     println!("\n ************** initializing logger *****************\n");
     let _ = env_logger::Builder::from_default_env().init();
 
     let matches = Command::new("BinDash")
-        .version("0.3.2")
+        .version("0.1.3")
         .about("Binwise Densified MinHash for Genome/Metagenome/Pangenome Comparisons")
         .arg(
             Arg::new("query_list")
@@ -323,28 +332,22 @@ fn main() {
     let threads = *matches.get_one::<usize>("threads").unwrap();
     let output = matches.get_one::<String>("output").cloned();
 
-    // Build global threadpool
     ThreadPoolBuilder::new()
         .num_threads(threads)
         .build_global()
         .unwrap();
 
-    // Read genome lists
     let query_genomes = read_genome_list(&query_list);
     let reference_genomes = read_genome_list(&reference_list);
 
-    // Build the base sketch arguments
-    // We'll pick the densification type via `dens` below.
     let sketch_args = SeqSketcherParams::new(
         kmer_size,
         sketch_size,
-        SketchAlgo::OPTDENS, // placeholder
+        SketchAlgo::OPTDENS, // actual algo chosen by sketcher type
         DataType::DNA,
     );
 
-    // Depending on kmer_size, pick a Kmer type and define the hash function (by value).
     if kmer_size <= 14 {
-        // Kmer32bit
         let nb_alphabet_bits = 2;
         let kmer_hash_fn_32bit = move |kmer: &Kmer32bit| -> <Kmer32bit as CompressedKmerT>::Val {
             let mask: <Kmer32bit as CompressedKmerT>::Val =
@@ -353,7 +356,7 @@ fn main() {
             kmer.get_compressed_value() & mask
         };
 
-        sketching_kmer_type::<Kmer32bit, _>(
+        sketching_kmerType::<Kmer32bit, _>(
             &query_genomes,
             &reference_genomes,
             &sketch_args,
@@ -363,20 +366,19 @@ fn main() {
             kmer_size,
         );
     } else if kmer_size == 16 {
-        // Kmer16b32bit
         let nb_alphabet_bits = 2;
         let kmer_hash_fn_16b32bit =
             move |kmer: &Kmer16b32bit| -> <Kmer16b32bit as CompressedKmerT>::Val {
-                // canonical
                 let canonical = kmer.reverse_complement().min(*kmer);
-                let mask: <Kmer16b32bit as CompressedKmerT>::Val = num::NumCast::from::<u64>(
-                    (1u64 << (nb_alphabet_bits * kmer.get_nb_base())) - 1,
-                )
-                .unwrap();
+                let mask: <Kmer16b32bit as CompressedKmerT>::Val =
+                    num::NumCast::from::<u64>(
+                        (1u64 << (nb_alphabet_bits * kmer.get_nb_base())) - 1,
+                    )
+                    .unwrap();
                 canonical.get_compressed_value() & mask
             };
 
-        sketching_kmer_type::<Kmer16b32bit, _>(
+        sketching_kmerType::<Kmer16b32bit, _>(
             &query_genomes,
             &reference_genomes,
             &sketch_args,
@@ -386,7 +388,6 @@ fn main() {
             kmer_size,
         );
     } else if kmer_size <= 32 {
-        // Kmer64bit
         let nb_alphabet_bits = 2;
         let kmer_hash_fn_64bit = move |kmer: &Kmer64bit| -> <Kmer64bit as CompressedKmerT>::Val {
             let canonical = kmer.reverse_complement().min(*kmer);
@@ -396,7 +397,7 @@ fn main() {
             canonical.get_compressed_value() & mask
         };
 
-        sketching_kmer_type::<Kmer64bit, _>(
+        sketching_kmerType::<Kmer64bit, _>(
             &query_genomes,
             &reference_genomes,
             &sketch_args,
