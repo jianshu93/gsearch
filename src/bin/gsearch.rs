@@ -563,7 +563,7 @@ fn main() {
     // the global command
     //
     let matches = Command::new("gsearch")
-        .version("0.3.3")
+        .version("0.3.4")
         .about("Approximate nearest neighbour search for genomes based on MinHash-like metrics")
         .arg_required_else_help(true)
         .arg(

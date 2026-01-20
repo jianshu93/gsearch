@@ -19,7 +19,7 @@ fn main() -> Result<()> {
     let _ = init_log();
 
     let matches = Command::new("bigsig")
-        .version("0.3.3")
+        .version("0.3.4")
         .about("Large-scale Sequence Search with BItsliced Genomic Signature Index (BIGSIG)")
         .arg_required_else_help(true)
         .subcommand(

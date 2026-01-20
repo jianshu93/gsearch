@@ -38,8 +38,8 @@ use crate::dna::dnafiles::{process_file_in_one_block, process_file_by_sequence, 
 
 use crate::utils::parameters::*;
 
-
-
+use xxhash_rust::xxh3::xxh3_64_with_seed;
+use num::{NumCast, PrimInt, ToPrimitive};
 // a type to describe msessage to collector task
 
 struct CollectMsg<Sig> {
@@ -57,6 +57,55 @@ impl <Sig> CollectMsg<Sig> {
     }
 
 } // end of CollectMsg
+
+
+
+/// Canonicalize (min(kmer, revcomp(kmer))) -> extract packed bits -> XXH3 -> return Kmer::Val (u32/u64).
+///
+/// IMPORTANT:
+/// - This returns Kmer::Val, so for Kmer32bit it returns u32 (lower 32 bits of XXH3),
+///   for Kmer64bit it returns u64 (full XXH3).
+/// - Safe for k=32 (avoids shifting by 64).
+pub fn make_xxh3_canonical_kmer_hash_fn<Kmer>(
+    seed: u64,
+) -> impl Fn(&Kmer) -> Kmer::Val + Copy + Send + Sync
+where
+    Kmer: CompressedKmerT + KmerBuilder<Kmer>,
+    Kmer::Val: PrimInt + NumCast + ToPrimitive,
+{
+    move |kmer: &Kmer| -> Kmer::Val {
+        // kmer is Copy-like in kmerutils, so this is fine
+        let rc = kmer.reverse_complement();
+        let canonical = if rc < *kmer { rc } else { *kmer };
+
+        // IMPORTANT: get_nb_base() is u8 in your codebase
+        let k: usize = canonical.get_nb_base() as usize;
+        let bits: usize = 2usize * k;
+
+        let mask_u64: u64 = if bits >= 64 {
+            u64::MAX
+        } else {
+            (1u64 << bits) - 1
+        };
+
+        let packed_u64: u64 = canonical
+            .get_compressed_value()
+            .to_u64()
+            .expect("Kmer::Val must be convertible to u64")
+            & mask_u64;
+
+        let h64 = xxh3_64_with_seed(&packed_u64.to_le_bytes(), seed);
+
+        // return u32 for 32-bit kmers, u64 for 64-bit kmers
+        let out_u64 = if std::mem::size_of::<Kmer::Val>() <= 4 {
+            (h64 as u32) as u64
+        } else {
+            h64
+        };
+
+        NumCast::from(out_u64).expect("cast to Kmer::Val must succeed")
+    }
+}
 
 // hnsw_pb  must contains directory of hnsw database.
 // In creation mode it is the directory containings file to proceess. In add mode it is where hnsw database reside,
@@ -161,12 +210,18 @@ fn sketchandstore_dir_compressedkmer<Kmer:CompressedKmerT+KmerBuilder<Kmer>, Ske
     //
     // Sketcher allocation, we  need reverse complement
     //
-    let kmer_hash_fn = | kmer : &Kmer | -> Kmer::Val {
-        let canonical =  kmer.reverse_complement().min(*kmer);
-        let mask : Kmer::Val = num::NumCast::from::<u64>((0b1 << (2*kmer.get_nb_base())) - 1).unwrap();
-        
-        canonical.get_compressed_value() & mask
-    };
+    //let kmer_hash_fn = |kmer: &Kmer| -> Kmer::Val {
+        //let canonical = kmer.reverse_complement().min(*kmer);
+        //let bits = 2usize * canonical.get_nb_base();
+
+        //let mask_u64 = if bits >= 64 { u64::MAX } else { (1u64 << bits) - 1 };
+        //let packed_u64 = canonical.get_compressed_value().to_u64().unwrap() & mask_u64;
+
+        //num::NumCast::from::<u64>(packed_u64).unwrap()
+    //};
+
+    let kmer_hash_fn = make_xxh3_canonical_kmer_hash_fn::<Kmer>(1337);
+
     //
     let mut nb_sent : usize = 0;       // this variable is moved in sender  io thread
     let mut nb_received : usize = 0;   // this variable is moved in collector thread!

@@ -37,6 +37,48 @@ use crate::aa::aafiles::{process_aafile_in_one_block, process_aabuffer_in_one_bl
 
 use crate::utils::parameters::*;
 
+use num::{NumCast, PrimInt, ToPrimitive};
+use xxhash_rust::xxh3::xxh3_64_with_seed;
+
+/// AA packed kmer hashing (no reverse-complement).
+///
+/// AA alphabet needs 5 bits to encode 20 symbols (2^5=32).
+pub fn make_xxh3_aa_kmer_hash_fn<Kmer>(
+    seed: u64,
+) -> impl Fn(&Kmer) -> Kmer::Val + Copy + Send + Sync
+where
+    Kmer: CompressedKmerT + KmerBuilder<Kmer>,
+    Kmer::Val: PrimInt + NumCast + ToPrimitive,
+{
+    const AA_BITS_PER_RESIDUE: usize = 5;
+
+    move |kmer: &Kmer| -> Kmer::Val {
+        let k: usize = kmer.get_nb_base() as usize;
+        let bits: usize = AA_BITS_PER_RESIDUE * k;
+
+        let mask_u64: u64 = if bits >= 64 {
+            u64::MAX
+        } else {
+            (1u64 << bits) - 1
+        };
+
+        let packed_u64: u64 = kmer
+            .get_compressed_value()
+            .to_u64()
+            .expect("Kmer::Val must be convertible to u64")
+            & mask_u64;
+
+        let h64: u64 = xxh3_64_with_seed(&packed_u64.to_le_bytes(), seed);
+
+        let out_u64 = if std::mem::size_of::<Kmer::Val>() <= 4 {
+            (h64 as u32) as u64
+        } else {
+            h64
+        };
+
+        NumCast::from(out_u64).expect("cast to Kmer::Val must succeed")
+    }
+}
 
 // a type to describe msessage to collector task
 struct CollectMsg<Sig> {
@@ -153,11 +195,7 @@ fn sketchandstore_dir_compressedkmer<Kmer:CompressedKmerT+KmerBuilder<Kmer>, Ske
     //
     // Sketcher allocation, we  need reverse complement
     //
-    let kmer_hash_fn = | kmer : &Kmer | -> Kmer::Val {
-        let mask : Kmer::Val = num::NumCast::from::<u64>((0b1 << (5*kmer.get_nb_base())) - 1).unwrap();
-        
-        kmer.get_compressed_value() & mask
-    };
+    let kmer_hash_fn = make_xxh3_aa_kmer_hash_fn::<Kmer>(1337);
     //
     let mut nb_sent : usize = 0;       // this variable is moved in sender  io thread
     let mut nb_received : usize = 0;   // this variable is moved in collector thread!

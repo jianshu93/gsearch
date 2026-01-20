@@ -48,31 +48,26 @@ fn read_genome_list(filepath: &str) -> Vec<String> {
         .collect()
 }
 
-/// Generic function that sketches a list of FASTA/Q file paths using a provided
-/// `SeqSketcherT` and a k-mer hash function. Returns a `HashMap` from file path
-/// to the single sketch vector.
-///
-/// IMPORTANT:
-/// - We still *initialize* OptDens/RevOptDens with `S = f32`
-/// - BUT the `Sig` type returned by your kmerutils OptDensHashSketch/RevOptDensHashSketch
-///   is `u64`, so we store `Vec<u64>`.
-fn sketch_files<Kmer, F>(
+
+fn sketch_files<Kmer, Sketcher, F>(
     file_paths: &[String],
-    sketcher: &(impl SeqSketcherT<Kmer, Sig = u64> + Sync),
+    sketcher: &Sketcher,
     kmer_hash_fn: F,
-) -> HashMap<String, Vec<u64>>
+) -> HashMap<String, Vec<<Sketcher as SeqSketcherT<Kmer>>::Sig>>
 where
     Kmer: CompressedKmerT + KmerBuilder<Kmer> + Send + Sync,
     <Kmer as CompressedKmerT>::Val: num::PrimInt + Send + Sync + Debug,
     KmerGenerator<Kmer>: KmerGenerationPattern<Kmer>,
+    Sketcher: SeqSketcherT<Kmer> + Sync,
+    <Sketcher as SeqSketcherT<Kmer>>::Sig: Send + Sync + Clone,
     F: Fn(&Kmer) -> <Kmer as CompressedKmerT>::Val + Send + Sync + Copy,
 {
     file_paths
         .par_iter()
         .map(|path| {
-            // Read all sequences from this FASTA/Q
             let mut sequences = Vec::new();
             let mut reader = parse_fastx_file(path).expect("Invalid FASTA/Q file");
+
             while let Some(record) = reader.next() {
                 let seq_record = record.expect("Error reading sequence record");
                 let seq_seq = seq_record.normalize(false).into_owned();
@@ -80,10 +75,9 @@ where
                 sequences.push(seq);
             }
 
-            // Prepare references
             let sequences_ref: Vec<&SequenceStruct> = sequences.iter().collect();
 
-            // sketch_compressedkmer_seqs returns Vec<Vec<Sig>> and inner vec has size 1 (per kmerutils design)
+            // Vec<Vec<Sig>>, inner vec has size 1
             let signature = sketcher.sketch_compressedkmer_seqs(&sequences_ref, kmer_hash_fn);
 
             (path.clone(), signature[0].clone())
@@ -97,19 +91,18 @@ where
 ///    distance = -ln( (2*j) / (1 + j) ) / kmer_size
 ///
 /// where j = 1 - hamming_distance (assuming DistHamming returns normalized distance).
-fn compute_distance(query_sig: &[u64], reference_sig: &[u64], kmer_size: usize) -> f64 {
+fn compute_distance<Sig>(query_sig: &[Sig], reference_sig: &[Sig], kmer_size: usize) -> f64
+where
+    Sig: Send + Sync,
+    DistHamming: Distance<Sig>,
+{
     let dist_hamming = DistHamming;
 
-    // DistHamming::eval returns an f32 in many implementations; keep it generic and cast to f64.
     let h: f64 = dist_hamming.eval(query_sig, reference_sig) as f64;
 
-    // Clamp to [0,1] for safety
     let h = if h <= 0.0 { 0.0 } else if h >= 1.0 { 1.0 } else { h };
 
-    // Jaccard from Hamming similarity
     let mut j = 1.0 - h;
-
-    // guard against j=0 => ln(0)
     if j <= 0.0 {
         j = f64::MIN_POSITIVE;
     }
@@ -118,14 +111,17 @@ fn compute_distance(query_sig: &[u64], reference_sig: &[u64], kmer_size: usize) 
     -fraction.ln() / (kmer_size as f64)
 }
 
-fn write_results(
+fn write_results<Sig>(
     output: Option<String>,
     query_genomes: &[String],
     reference_genomes: &[String],
-    query_sketches: &HashMap<String, Vec<u64>>,
-    reference_sketches: &HashMap<String, Vec<u64>>,
+    query_sketches: &HashMap<String, Vec<Sig>>,
+    reference_sketches: &HashMap<String, Vec<Sig>>,
     kmer_size: usize,
-) {
+) where
+    Sig: Send + Sync,
+    DistHamming: Distance<Sig>,
+{
     let mut output_writer: Box<dyn Write> = match output {
         Some(filename) => {
             Box::new(BufWriter::new(File::create(&filename).expect("Cannot create output file")))
@@ -196,14 +192,11 @@ fn sketching_kmerType<Kmer, F>(
     match dens {
         0 => {
             let sketcher = OptDensHashSketch::<Kmer, f32>::new(sketch_args);
-            println!(
-                "Sketching query genomes with OptDens (internal f32, output u64 signature)..."
-            );
+
+            println!("Sketching query genomes with OptDens...");
             let query_sketches = sketch_files(query_genomes, &sketcher, kmer_hash_fn);
 
-            println!(
-                "Sketching reference genomes with OptDens (internal f32, output u64 signature)..."
-            );
+            println!("Sketching reference genomes with OptDens...");
             let reference_sketches = sketch_files(reference_genomes, &sketcher, kmer_hash_fn);
 
             println!("Performing pairwise comparisons...");
@@ -218,14 +211,11 @@ fn sketching_kmerType<Kmer, F>(
         }
         1 => {
             let sketcher = RevOptDensHashSketch::<Kmer, f32>::new(sketch_args);
-            println!(
-                "Sketching query genomes with RevOptDens (internal f32, output u64 signature)..."
-            );
+
+            println!("Sketching query genomes with RevOptDens...");
             let query_sketches = sketch_files(query_genomes, &sketcher, kmer_hash_fn);
 
-            println!(
-                "Sketching reference genomes with RevOptDens (internal f32, output u64 signature)..."
-            );
+            println!("Sketching reference genomes with RevOptDens...");
             let reference_sketches = sketch_files(reference_genomes, &sketcher, kmer_hash_fn);
 
             println!("Performing pairwise comparisons...");
@@ -247,7 +237,7 @@ fn main() {
     let _ = env_logger::Builder::from_default_env().init();
 
     let matches = Command::new("BinDash")
-        .version("0.3.3")
+        .version("0.3.4")
         .about("Binwise Densified MinHash for Genome/Metagenome/Pangenome Comparisons")
         .arg(
             Arg::new("query_list")

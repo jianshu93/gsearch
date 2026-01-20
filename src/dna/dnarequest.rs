@@ -35,8 +35,55 @@ use crate::utils::*;
 use crate::dna::dnafiles::{process_file_by_sequence, process_buffer_by_sequence, process_buffer_in_one_block, process_file_in_one_block};
 use crate::{matcher::*, answer::ReqAnswer};
 
+use num::{NumCast, PrimInt, ToPrimitive};
+use xxhash_rust::xxh3::xxh3_64_with_seed;
 
+/// Canonicalize (min(kmer, revcomp)) -> pack -> XXH3 -> return Kmer::Val (u32/u64).
+/// Safe for k=32 (never shifts by 64).
+pub fn make_xxh3_canonical_kmer_hash_fn<Kmer>(
+    seed: u64,
+) -> impl Fn(&Kmer) -> Kmer::Val + Copy + Send + Sync
+where
+    Kmer: CompressedKmerT + KmerBuilder<Kmer> + Copy,
+    Kmer::Val: PrimInt + ToPrimitive + NumCast,
+{
+    move |kmer: &Kmer| -> Kmer::Val {
+        // canonicalize
+        let rc = kmer.reverse_complement();
+        let canonical = if rc < *kmer { rc } else { *kmer };
 
+        // DNA packing: 2 bits per base
+        let k: usize = canonical.get_nb_base() as usize;
+        let bits: usize = 2usize * k;
+
+        // safe mask (avoid 1<<64)
+        let mask_u64: u64 = if bits >= 64 {
+            u64::MAX
+        } else {
+            (1u64 << bits) - 1
+        };
+
+        // convert packed bits to u64 safely (works for u32/u64)
+        let packed_u64: u64 = canonical
+            .get_compressed_value()
+            .to_u64()
+            .expect("Kmer::Val must fit in u64")
+            & mask_u64;
+
+        // hash packed bytes
+        let h64: u64 = xxh3_64_with_seed(&packed_u64.to_le_bytes(), seed);
+
+        // output type:
+        // - if Val is u32-ish => use low 32 bits
+        // - if Val is u64-ish => keep full 64
+        if std::mem::size_of::<Kmer::Val>() <= 4 {
+            let low32 = h64 as u32 as u64; // intentional truncation
+            NumCast::from(low32).expect("casting hash->Val failed")
+        } else {
+            NumCast::from(h64).expect("casting hash->Val failed")
+        }
+    }
+}
 
 // a type to describe msessage to collector task
 
@@ -115,11 +162,14 @@ fn sketch_and_request_dir_compressedkmer<Kmer:CompressedKmerT + KmerBuilder<Kmer
     //
     // Sketcher allocation, we do need reverse complement
     //
-    let kmer_hash_fn = | kmer : &Kmer | -> Kmer::Val {
-        let canonical =  kmer.reverse_complement().min(*kmer);
-        let mask : Kmer::Val = num::NumCast::from::<u64>((0b1 << (2*kmer.get_nb_base())) - 1).unwrap();
-        canonical.get_compressed_value() & mask
-    };
+    //let kmer_hash_fn = | kmer : &Kmer | -> Kmer::Val {
+        //let canonical =  kmer.reverse_complement().min(*kmer);
+        //let mask : Kmer::Val = num::NumCast::from::<u64>((0b1 << (2*kmer.get_nb_base())) - 1).unwrap();
+        //canonical.get_compressed_value() & mask
+    //};
+    let seed: u64 = 1337;
+    let kmer_hash_fn = make_xxh3_canonical_kmer_hash_fn::<Kmer>(seed);
+
     // create something for likelyhood computation
     let mut matcher = Matcher::new(processing_parameters.get_kmer_size(), sketcher_params.get_sketch_size(), seqdict);
     let mut nb_sent = 0;
