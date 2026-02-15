@@ -52,8 +52,8 @@ annembed = { version = "0.1"}
 # kmerutils = { version = "0.0.13" }
 kmerutils = {workspace = true}
 
-anndists = { git = "https://github.com/jean-pierreBoth/anndists" }
-# anndists = { version = "0.1"}
+# anndists = { git = "https://github.com/jean-pierreBoth/anndists" }
+anndists = { version = "0.1.4"}
 
 xxhash-rust = { version = "0.8", features = [ "std", "xxh3" ] }
 
