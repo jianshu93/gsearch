@@ -37,7 +37,7 @@ If you find GSearch useful, please cite the following paper:
 ## Quick install on Linux (Stable version)
 ### Install via bioconda
 ```bash
-conda install -c conda-forge -c bioconda gsearch=0.2.2
+conda install -c conda-forge -c bioconda gsearch
 ```
 
 ### pre-combiled binary
