@@ -6,7 +6,7 @@ use std::path::Path;
 
 fn main() -> io::Result<()> {
     let matches = Command::new("reformat")
-        .version("0.3.4")
+        .version("0.3.5")
         .author("Your Name")
         .about("Processes input files for ANI calculation")
         .arg(Arg::new("kmer")

@@ -21,7 +21,7 @@ fn main() {
 
     // Use Clap to parse command-line arguments
     let matches = Command::new("hnsw2knn")
-        .version("0.3.4")
+        .version("0.3.5")
         .about("Extract K Nearest Neighbors (K-NN) from HNSW graph.")
         .arg(
             Arg::new("database_path")
